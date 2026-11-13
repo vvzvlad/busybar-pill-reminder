@@ -1,0 +1,50 @@
+{
+  "format_version": 1,
+  "version": 1,
+  "fields": {
+    "slot1": {
+      "type": "group",
+      "label": "Dose 1",
+      "fields": {
+        "name": { "type": "string", "label": "Name", "description": "Latin letters, up to 10.", "default": "VIT D", "max_length": 10 },
+        "time": { "type": "time", "label": "Time", "default": "21:00" },
+        "enabled": { "type": "boolean", "label": "On", "default": true }
+      }
+    },
+    "slot2": {
+      "type": "group",
+      "label": "Dose 2",
+      "fields": {
+        "name": { "type": "string", "label": "Name", "description": "Latin letters, up to 10.", "default": "", "max_length": 10 },
+        "time": { "type": "time", "label": "Time", "default": "21:00" },
+        "enabled": { "type": "boolean", "label": "On", "default": false }
+      }
+    },
+    "slot3": {
+      "type": "group",
+      "label": "Dose 3",
+      "fields": {
+        "name": { "type": "string", "label": "Name", "description": "Latin letters, up to 10.", "default": "", "max_length": 10 },
+        "time": { "type": "time", "label": "Time", "default": "21:00" },
+        "enabled": { "type": "boolean", "label": "On", "default": false }
+      }
+    },
+    "slot4": {
+      "type": "group",
+      "label": "Dose 4",
+      "fields": {
+        "name": { "type": "string", "label": "Name", "description": "Latin letters, up to 10.", "default": "", "max_length": 10 },
+        "time": { "type": "time", "label": "Time", "default": "21:00" },
+        "enabled": { "type": "boolean", "label": "On", "default": false }
+      }
+    },
+    "repeat_min": {
+      "type": "integer",
+      "label": "Remind again after, minutes",
+      "description": "If Start is not pressed.",
+      "default": 10,
+      "min": 1,
+      "max": 240
+    }
+  }
+}
