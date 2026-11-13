@@ -1,0 +1,9 @@
+{
+  "format_version": 1,
+  "id": "io.github.vvzvlad.pills",
+  "name": "Pill Reminder",
+  "version": "0.1.0",
+  "api_version": "27.12.0",
+  "description": "Reminds you to take your pills on time.",
+  "author": "vvzvlad"
+}
