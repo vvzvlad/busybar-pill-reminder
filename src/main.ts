@@ -1,3 +1,4 @@
+import { generateXpm2 } from "@busy-app/busy-lib";
 import { formatHM } from "@shared/datetime";
 import { createScreen, type Element } from "./screen";
 import { loadValues, type SettingsValues } from "./settings";
@@ -14,7 +15,47 @@ const WHITE = "#FFFFFFFF";
 const GRAY = "#A0A0A0FF";
 const AMBER = "#FFB000FF";
 
+/** The capsule left of a due dose, 12 px square: r its red half, w its white half, R and W their shaded edges. */
+const PILL = generateXpm2({
+  palette: { ".": "none", r: "#F03030", R: "#A01818", w: "#F0F0F0", W: "#A0A0A0" },
+  grid: [
+    "........rrr.",
+    ".......rrrrr",
+    "......rrrrrR",
+    ".....rrrrrRR",
+    "....wrrrrRR.",
+    "...wwwrrRR..",
+    "..wwwwwRR...",
+    ".wwwwwWW....",
+    "wwwwwWW.....",
+    "wwwwWW......",
+    "wwwWW.......",
+    ".wWW........",
+  ],
+});
+/** The capsule shakes, two px from side to side, a step every SHAKE_MS. */
+const SHAKE_MS = 200;
+/** Right of the capsule the dose name and the hint are centered on TEXT_X, in TEXT_W px. */
+const TEXT_X = 44;
+const TEXT_W = 56;
+/**
+ * Advances of the bold font for " " to "~", a base-36 digit each, as busy-lib's glyph map has them: its textWidth()
+ * would bundle the maps of every font the app names, about 16 KiB of heap.
+ */
+const BOLD_ADVANCES = "54489982444734467777777777235757a777766775676a877777778b777464755666666665565866665666787665456";
+
+/** The width of text in the bold font; a character the table lacks counts as 7 px. */
+function boldWidth(text: string): number {
+  let width = 0;
+  for (const ch of text) {
+    const advance = BOLD_ADVANCES[ch.charCodeAt(0) - 32];
+    width += advance === undefined ? 7 : parseInt(advance, 36);
+  }
+  return width;
+}
+
 type Slot = { name: string; time: string; enabled: boolean };
+type Taken = { name: string; time: string };
 type Settings = { slots: Slot[]; repeat: number };
 
 /** The defaults of settings.json, for a bar that returns no settings. */
@@ -65,10 +106,10 @@ function nextDose(slots: Slot[], now: Date): Slot | null {
 }
 
 /** The last dose taken, as stored on Start; null before the first. */
-function readLast(): { name: string; time: string } | null {
+function readLast(): Taken | null {
   try {
     const raw = localStorage.getItem(LAST_KEY);
-    return raw ? (JSON.parse(raw) as { name: string; time: string }) : null;
+    return raw ? (JSON.parse(raw) as Taken) : null;
   } catch {
     return null;
   }
@@ -82,9 +123,20 @@ function front(top: string, topColor: string, bottom: string): Element[] {
   ];
 }
 
+/**
+ * A due dose: the capsule on the left, `step` setting which side it leans to, the name and "START = TAKEN" right of
+ * it. A name too wide for the bold font there is written in the small one.
+ */
+function reminder(name: string, step: number): Element[] {
+  return [
+    { id: "pill", type: "xpmbitmap", data: PILL, x: step % 2 === 0 ? 0 : 2, y: 2, align: "top_left" },
+    { id: "top", type: "text", text: name, font: boldWidth(name) <= TEXT_W ? "bold" : "small", color: AMBER, x: TEXT_X, y: -1, align: "top_mid" },
+    { id: "bottom", type: "text", text: "START = TAKEN", font: "small", color: GRAY, x: TEXT_X, y: 8, align: "top_mid" },
+  ];
+}
+
 /** The back display, 160x80 without the status bar's 12 px on the right: the last dose taken. */
-function back(): Element {
-  const last = readLast();
+function back(last: Taken | null): Element {
   const text = last ? `Last: ${last.name} ${last.time}` : "Last: --";
   return { id: "last", type: "text", text, font: "normal", color: WHITE, x: 74, y: 40, align: "center", display: "back" };
 }
@@ -100,6 +152,11 @@ function main(): void {
   /** Doses that came due and are not taken yet, oldest first, each with the minute (Date.now() / 60 s) it came due. */
   const pending: { slot: Slot; since: number }[] = [];
   let timer: ReturnType<typeof setTimeout> | undefined;
+  /** Shakes the capsule; runs only while a reminder is on the display. */
+  let shakeTimer: ReturnType<typeof setInterval> | undefined;
+  let shake = 0;
+  /** The last dose taken, read once: the shaking redraws the back display several times a second. */
+  let last = readLast();
   let stopped = false;
 
   /**
@@ -119,12 +176,26 @@ function main(): void {
     if (stopped || !settings) return;
     const now = new Date();
     const due = reminding();
+    shaking(due >= 0);
     if (due >= 0) {
-      screen.draw([...front(pending[due].slot.name, AMBER, "START = TAKEN"), back()]);
+      screen.draw([...reminder(pending[due].slot.name, shake), back(last)]);
       return;
     }
     const next = nextDose(settings.slots, now);
-    screen.draw([...front(formatHM(now), WHITE, next ? `${next.name} ${next.time}` : "--"), back()]);
+    screen.draw([...front(formatHM(now), WHITE, next ? `${next.name} ${next.time}` : "--"), back(last)]);
+  }
+
+  /** Starts the shake timer when a reminder comes on the display, stops it when the reminder leaves. */
+  function shaking(on: boolean): void {
+    if (on && shakeTimer === undefined) {
+      shakeTimer = setInterval(() => {
+        shake += 1;
+        draw();
+      }, SHAKE_MS);
+    } else if (!on && shakeTimer !== undefined) {
+      clearInterval(shakeTimer);
+      shakeTimer = undefined;
+    }
   }
 
   /** Once a minute, just after it begins: every dose whose time it is comes due and joins the end of the queue of doses not taken yet. */
@@ -148,16 +219,19 @@ function main(): void {
       const due = reminding();
       if (due < 0) return;
       try {
-        localStorage.setItem(LAST_KEY, JSON.stringify({ name: pending[due].slot.name, time: formatHM(new Date()) }));
+        const taken: Taken = { name: pending[due].slot.name, time: formatHM(new Date()) };
+        localStorage.setItem(LAST_KEY, JSON.stringify(taken));
+        last = taken;
       } catch (err) {
         report(err);
       }
       pending.splice(due, 1);
       draw();
     } else if (event.key === "back") {
-      // Back leaves the app: with the timer cleared and the handler detached, nothing keeps it alive.
+      // Back leaves the app: with the timers cleared and the handler detached, nothing keeps it alive.
       stopped = true;
       if (timer !== undefined) clearTimeout(timer);
+      if (shakeTimer !== undefined) clearInterval(shakeTimer);
       // Not detached from inside the handler itself: the unbind would stop the app while this handler still runs.
       setTimeout(unbind, 0);
     }

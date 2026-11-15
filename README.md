@@ -8,7 +8,7 @@ A JavaScript app for [BUSY Bar](https://busy.app). Work in progress.
 
 - Up to four reminders, each with a name, a time and an on/off switch, plus a repeat interval, are set in the app's settings.
 - When idle, the app shows the clock and the next dose, such as `VIT D 21:00`.
-- At dose time it shows the reminder, plays a sound and blinks the status light. Press Start when you have taken it; otherwise it reminds you again after the repeat interval.
+- At dose time it shows the reminder with a shaking pill, plays a sound and blinks the status light. Press Start when you have taken it; otherwise it reminds you again after the repeat interval.
 - The back display shows the last dose taken, such as `Last: VIT D 08:12`.
 - The BUSY Bar runs one app at a time, so reminders come only while this app is open.
 
