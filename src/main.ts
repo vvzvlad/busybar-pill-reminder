@@ -1,5 +1,6 @@
 import { generateXpm2 } from "@busy-app/busy-lib";
 import { formatHM } from "@shared/datetime";
+import { device } from "@shared/device";
 import { createScreen, type Element } from "./screen";
 import { loadValues, type SettingsValues } from "./settings";
 import manifest from "./appmeta/manifest.json";
@@ -10,6 +11,10 @@ const APP = manifest.id;
 const MINUTE_MS = 60 * 1000;
 /** localStorage key of the last dose taken: {name, time}. */
 const LAST_KEY = "last";
+/** localStorage key of the journal of doses taken: day "YYYY-MM-DD" → its doses, {name, time} each, in the order taken. */
+const JOURNAL_KEY = "journal";
+/** The journal keeps the doses of this many days, today included. */
+const JOURNAL_DAYS = 30;
 
 const WHITE = "#FFFFFFFF";
 const GRAY = "#A0A0A0FF";
@@ -115,6 +120,32 @@ function readLast(): Taken | null {
   }
 }
 
+/** The bar's local date as "2026-11-15". */
+function dayOf(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** The journal of doses by day; empty before the first, or when what is stored does not parse, so that the next write replaces it. */
+function readJournal(): Record<string, Taken[]> {
+  try {
+    const raw = localStorage.getItem(JOURNAL_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, Taken[]>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Adds a dose taken now to the journal and drops the days older than JOURNAL_DAYS. Throws when storage fails. */
+function logDose(taken: Taken, now: Date): void {
+  const journal = readJournal();
+  const today = dayOf(now);
+  journal[today] = [...(journal[today] ?? []), taken];
+  const oldest = dayOf(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (JOURNAL_DAYS - 1)));
+  for (const day of Object.keys(journal)) if (day < oldest) delete journal[day];
+  localStorage.setItem(JOURNAL_KEY, JSON.stringify(journal));
+}
+
 /** Two lines on the front display: a bold one on top, a small one under it. */
 function front(top: string, topColor: string, bottom: string): Element[] {
   return [
@@ -172,13 +203,14 @@ function main(): void {
     return fresh >= 0 ? fresh : pending.findIndex((p) => (minute - p.since) % repeat === 0);
   }
 
-  function draw(): void {
+  /** With `led` the status LED blinks that colour. */
+  function draw(led?: string): void {
     if (stopped || !settings) return;
     const now = new Date();
     const due = reminding();
     shaking(due >= 0);
     if (due >= 0) {
-      screen.draw([...reminder(pending[due].slot.name, shake), back(last)]);
+      screen.draw([...reminder(pending[due].slot.name, shake), back(last)], led);
       return;
     }
     const next = nextDose(settings.slots, now);
@@ -208,7 +240,13 @@ function main(): void {
         if (slot.enabled && slot.time === hm && !pending.some((p) => p.slot === slot)) pending.push({ slot, since: minute });
       }
     }
-    draw();
+    // A dose coming due, and each repeat of its reminder, plays the sound and blinks the LED amber.
+    if (reminding() >= 0) {
+      void device.AudioPlay({ application_name: APP, path: "sounds/due.snd" }).catch(report);
+      draw(AMBER);
+    } else {
+      draw();
+    }
     timer = setTimeout(tick, MINUTE_MS - (Date.now() % MINUTE_MS) + 50);
   }
 
@@ -219,9 +257,11 @@ function main(): void {
       const due = reminding();
       if (due < 0) return;
       try {
-        const taken: Taken = { name: pending[due].slot.name, time: formatHM(new Date()) };
+        const now = new Date();
+        const taken: Taken = { name: pending[due].slot.name, time: formatHM(now) };
         localStorage.setItem(LAST_KEY, JSON.stringify(taken));
         last = taken;
+        logDose(taken, now);
       } catch (err) {
         report(err);
       }
