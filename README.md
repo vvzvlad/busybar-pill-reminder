@@ -1,20 +1,56 @@
 # Pill Reminder
 
-Reminds you to take your pills on time, and remembers whether you did.
+Reminds you to take your pills on time.
 
-A JavaScript app for [BUSY Bar](https://busy.app). Work in progress.
+![Pill Reminder on the BUSY Bar: a shaking capsule, VIT D, START = TAKEN](media/due.gif)
 
-## What it does
+Set up to four doses in the settings, each with a name and a time. The bar shows the clock and the next dose, and when a dose is due it shakes a capsule on the front display, plays a sound and blinks the status light until you press Start. The back display shows the last dose you took.
 
-- Up to four reminders, each with a name, a time and an on/off switch, plus a repeat interval, are set in the app's settings.
-- When idle, the app shows the clock and the next dose, such as `VIT D 21:00`.
-- At dose time it shows the reminder with a shaking pill, plays a sound and blinks the status light. Press Start when you have taken it; otherwise it reminds you again after the repeat interval.
-- The back display shows the last dose taken, such as `Last: VIT D 08:12`.
-- The BUSY Bar runs one app at a time, so reminders come only while this app is open.
+A JavaScript app for [BUSY Bar](https://busy.app).
+
+## What the bar shows
+
+Between doses the front display shows the clock and, under it, the next dose that is on and its time.
+
+![20:39 and VIT D 21:00](media/idle.png)
+
+With every dose off in the settings, `--` takes the place of the next dose.
+
+![21:00 and --](media/none.png)
+
+The back display shows the last dose taken and the time Start was pressed for it; before the first one it shows `Last: --`.
+
+![The back display: Last: --](media/none-back.png)
+
+When a dose's time comes, the front display shows a capsule shaking left of the dose name and `START = TAKEN`, a sound plays and the status light blinks amber. A name too wide for the large font is written in the small one. The reminder stays for that minute, then the clock comes back; until Start is pressed, the reminder, the sound and the blink come back every repeat interval, 10 minutes by default. When several doses are due at once, they come one at a time: Start on one shows the next.
+
+Start while a reminder is on the display marks the dose as taken, and the back display shows it.
+
+![The back display: Last: VIT D 21:00](media/taken-back.png)
+
+The BUSY Bar runs one app at a time, so reminders come only while this app is open.
+
+## Buttons
+
+| Button | What it does |
+| --- | --- |
+| Start | Marks the dose on the display as taken. |
+| Back | Quits the app. |
+
+## Settings
+
+| Setting | What it does |
+| --- | --- |
+| Dose 1 to Dose 4: Name | The name on the display, Latin letters, up to 10. VIT D for Dose 1 by default, empty for the others. |
+| Dose 1 to Dose 4: Time | When the dose is due, every day. 21:00 by default. |
+| Dose 1 to Dose 4: On | Whether the dose is reminded of. On for Dose 1 by default, off for the others. |
+| Remind again after, minutes | How long after a reminder it comes back while Start is not pressed, 1 to 240 minutes. 10 by default. |
+
+The app reads its settings when it starts.
 
 ## Data
 
-None: it works offline and keeps its log on the BUSY Bar.
+None from the network: the app works offline. It keeps on the BUSY Bar, in its local storage, the last dose taken, for the back display, and a journal of the doses taken in the last 30 days.
 
 ## Build
 
