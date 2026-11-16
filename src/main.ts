@@ -94,14 +94,17 @@ function minutesOf(hm: string): number {
   return Number(h) * 60 + Number(m);
 }
 
-/** The enabled dose that comes next from now, today or tomorrow; null when none is enabled. */
+/**
+ * The enabled dose that comes next from now, today or tomorrow; null when none is enabled. A dose of this very minute
+ * counts as tomorrow's: in its minute the clock is on the display once it has been taken.
+ */
 function nextDose(slots: Slot[], now: Date): Slot | null {
   const current = now.getHours() * 60 + now.getMinutes();
   let best: Slot | null = null;
   let bestIn = Infinity;
   for (const slot of slots) {
     if (!slot.enabled) continue;
-    const inMinutes = (minutesOf(slot.time) - current + 1440) % 1440;
+    const inMinutes = ((minutesOf(slot.time) - current + 1439) % 1440) + 1;
     if (inMinutes < bestIn) {
       best = slot;
       bestIn = inMinutes;
@@ -230,14 +233,25 @@ function main(): void {
     }
   }
 
-  /** Once a minute, just after it begins: every dose whose time it is comes due and joins the end of the queue of doses not taken yet. */
+  /**
+   * Once a minute, just after it begins: every dose whose time it is comes due and joins the end of the queue of doses
+   * not taken yet. A dose the journal has as taken this very minute does not: the app was left and opened again within
+   * the minute, and the queue, kept only in memory, started empty.
+   */
   function tick(): void {
     if (stopped) return;
     if (settings) {
-      const hm = formatHM(new Date());
-      const minute = Math.floor(Date.now() / MINUTE_MS);
+      const now = new Date();
+      const hm = formatHM(now);
+      const minute = Math.floor(now.getTime() / MINUTE_MS);
+      let taken: Taken[] | null = null;
       for (const slot of settings.slots) {
-        if (slot.enabled && slot.time === hm && !pending.some((p) => p.slot === slot)) pending.push({ slot, since: minute });
+        if (!slot.enabled || slot.time !== hm || pending.some((p) => p.slot === slot)) continue;
+        if (taken === null) taken = readJournal()[dayOf(now)] ?? [];
+        // A journal entry accounts for one dose only: of two doses with the same name and time, one taken, the other comes due.
+        const k = taken.findIndex((t) => t.name === slot.name && t.time === hm);
+        if (k >= 0) taken.splice(k, 1);
+        else pending.push({ slot, since: minute });
       }
     }
     // A dose coming due, and each repeat of its reminder, plays the sound and blinks the LED amber.
